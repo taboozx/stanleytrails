@@ -6,10 +6,10 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from telethon import TelegramClient, events
 from telethon.tl.types import Message
 
-# 🔐 Load env
-load_dotenv()
+# # 🔐 Load env
+# load_dotenv()
 
-# 🧾 Config
+# # 🧾 Config
 # api_id = int(os.getenv("API_ID"))
 # api_hash = os.getenv("API_HASH")
 # channel_username = os.getenv("CHANNEL_USERNAME", "@stanleytrails")
@@ -17,19 +17,23 @@ load_dotenv()
 # WATCH_CHANNEL = os.getenv("WATCH_CHANNEL", "stanleytrails")
 # AUTH_TOKEN = os.getenv("API_AUTH_TOKEN", "supersecrettoken")
 
-from app.config import API_ID, API_HASH, CHANNEL_USERNAME, FRONTEND_ORIGIN, WATCH_CHANNEL, AUTH_TOKEN, SIGNATURE_HTML, SIGNATURE_TEXT
-
+from app.config import (
+    API_ID, API_HASH,
+    CHANNEL_USERNAME, FRONTEND_ORIGIN,
+    WATCH_CHANNEL, AUTH_TOKEN,
+    SIGNATURE_HTML, SIGNATURE_TEXT
+)
 SIGNATURE_HTML = '😾 <a href="https://t.me/stanleytrails">Азиатская бытовуха</a>'
 SIGNATURE_TEXT = '😾 Азиатская бытовуха'
 
 # 🚀 Init
-client = TelegramClient("userbot", api_id, api_hash)
+client = TelegramClient("userbot", API_ID, API_HASH)
 app = FastAPI()
 
 # 🌐 CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_origin],
+    allow_origins=[FRONTEND_ORIGIN],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -133,7 +137,7 @@ async def publish(
         caption += f"\n\n{description.strip()}"
 
     try:
-        await client.send_file(channel_username, path, caption=caption, parse_mode="HTML")
+        await client.send_file(CHANNEL_USERNAME, path, caption=caption, parse_mode="HTML")
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
