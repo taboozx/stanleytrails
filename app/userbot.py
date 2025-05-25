@@ -5,8 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from telethon.tl.types import Message
 from telethon import events
+from datetime import datetime
 from app.api import hashtags_api
 from app.telegram_client import client
+from app.utils.extract_hashtags import extract_hashtags_from_channel
 from app.config import (
     API_ID, API_HASH,
     CHANNEL_USERNAME, FRONTEND_ORIGIN,
@@ -42,6 +44,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 @app.on_event("startup")
 async def startup():
     await client.start()
+    asyncio.create_task(periodic_hashtag_scan())
     asyncio.create_task(auto_signature_watcher())
 
 # 🕰 Background watcher: check and fix message signatures
@@ -147,3 +150,14 @@ async def publish(
             return {"status": "error", "detail": str(e)}
 
     return {"status": "ok", "text": caption}
+
+async def periodic_hashtag_scan():
+    while True:
+        print("🕵️‍♂️ Запуск фонового сканирования хэштегов")
+        try:
+            await asyncio.sleep(5) 
+            await extract_hashtags_from_channel()
+            print(f"✅ Хэштеги обновлены ({datetime.now().isoformat()})")
+        except Exception as e:
+            print(f"❌ Ошибка при сканировании: {e}")
+        await asyncio.sleep(86400)  # 24 часа

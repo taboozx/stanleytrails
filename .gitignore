@@ -32,3 +32,4 @@ dist/
 # Cookiecutter junk
 cookiecutter_template/
 example_project/
+userbot.session
