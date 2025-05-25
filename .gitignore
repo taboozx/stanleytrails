@@ -1,1 +1,34 @@
-echo -e ".env\ntemp/\n__pycache__/\n*.pyc" > .gitignore
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caches
+.cache/
+*.sqlite3
+*.db
+
+# Environments
+.env
+.venv/
+venv/
+ENV/
+
+# VS Code
+.vscode/
+
+# macOS & Windows
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Cookiecutter junk
+cookiecutter_template/
+example_project/
