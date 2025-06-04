@@ -23,10 +23,14 @@ class ContestWinner(Base):
 
 class Hashtag(Base):
     __tablename__ = "hashtags"
-
     id = Column(Integer, primary_key=True, index=True)
     tag = Column(String, unique=True, index=True)
     count = Column(Integer, default=0)
+
+class MetaKV(Base):
+    __tablename__ = "meta_kv"
+    key = Column(String, primary_key=True)
+    value = Column(String)
 
 class ApprovedUser(Base):
     __tablename__ = "approved_users"
@@ -34,6 +38,7 @@ class ApprovedUser(Base):
     id = Column(Integer, primary_key=True, index=True)
     tg_id = Column(String, unique=True)
     username = Column(String, nullable=True)
+
 
 
 print("✅ модели успешно определены")

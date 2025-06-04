@@ -10,6 +10,6 @@ def get_popular_hashtags():
     db: Session = SessionLocal()
     try:
         tags = db.query(Hashtag).order_by(Hashtag.count.desc()).limit(20).all()
-        return [tag.tag for tag in tags]
+        return [{"tag": h.tag.lstrip("#"), "count": h.count} for h in tags]
     finally:
         db.close()
