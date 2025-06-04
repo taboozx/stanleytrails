@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-echo -e ".env\ntemp/\n__pycache__/\n*.pyc" > .gitignore
-=======
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -36,4 +33,8 @@ dist/
 cookiecutter_template/
 example_project/
 userbot.session
->>>>>>> recovery-env
+
+
+*.pyc
+__pycache__/
+*.session
