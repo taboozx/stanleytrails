@@ -1,0 +1,11 @@
+[33mc9cfce7[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m HEAD@{0}: checkout: moving from contests to main
+[33m55d7c77[m[33m ([m[1;32mcontests[m[33m)[m HEAD@{1}: fast-import
+[33mab2c262[m HEAD@{2}: commit: env deleted
+[33md92b6c3[m HEAD@{3}: commit: database done
+[33mab2ed73[m HEAD@{4}: commit: start database integration
+[33m27416be[m HEAD@{5}: checkout: moving from cerberus_in_progress to contests
+[33m27416be[m HEAD@{6}: commit: cerberus in progress still not working
+[33maa8feb9[m HEAD@{7}: checkout: moving from main to cerberus_in_progress
+[33maa8feb9[m HEAD@{8}: commit: refactor
+[33m93ee305[m HEAD@{9}: Branch: renamed refs/heads/master to refs/heads/main
+[33m93ee305[m HEAD@{11}: commit (initial): Initial commit: telegram bot with FastAPI and signature filter
