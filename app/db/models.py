@@ -27,6 +27,7 @@ class Hashtag(Base):
     tag = Column(String, unique=True, index=True)
     count = Column(Integer, default=0)
 
+# для учета последнего отсканированного поста, для разных нужд
 class MetaKV(Base):
     __tablename__ = "meta_kv"
     key = Column(String, primary_key=True)
