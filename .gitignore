@@ -36,5 +36,5 @@ userbot.session
 
 
 *.pyc
-__pycache__/
 *.session
+*.session-journal
