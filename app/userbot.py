@@ -9,7 +9,6 @@ from app.api import hashtags_api
 from app.telegram_client import client
 from app.utils.extract_hashtags import extract_hashtags_from_channel
 from app.config import (
-    API_ID, API_HASH,
     CHANNEL_USERNAME, FRONTEND_ORIGIN,
     WATCH_CHANNEL, AUTH_TOKEN,
     SIGNATURE_HTML, SIGNATURE_TEXT
