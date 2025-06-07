@@ -1,5 +1,5 @@
 import os, shutil, asyncio
-from fastapi import FastAPI, UploadFile, Form, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, Form, HTTPException, Depends, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from telethon.tl.types import Message
@@ -8,6 +8,10 @@ from datetime import datetime
 from app.api import hashtags_api
 from app.telegram_client import client
 from app.utils.extract_hashtags import extract_hashtags_from_channel
+from typing import List
+import logging
+
+
 from app.config import (
     CHANNEL_USERNAME, FRONTEND_ORIGIN,
     WATCH_CHANNEL, AUTH_TOKEN,
@@ -107,34 +111,26 @@ async def publish(
     type: str = Form(None),
     title: str = Form(None),
     description: str = Form(...),
-    file: UploadFile = Form(None),
+    media: List[UploadFile] = File(None),
     credentials: HTTPAuthorizationCredentials = Depends(verify_token),
 ):
+    logger = logging.getLogger("uvicorn")
+
+    logger.info("📥 Incoming POST /publish/")
+    logger.info(f"📝 Title: {title}")
+    logger.info(f"🧾 Description: {description}")
+    logger.info(f"🖼 Files: {[file.filename for file in media] if media else 'No files'}")
+
     caption = ""
-    if title.strip():
+    if title and title.strip():
         caption += f"<b>{title.strip()}</b>"
     if description.strip():
         if caption:
             caption += "\n\n"
         caption += description.strip()
 
-    # если есть файл — отправляем с файлом
-    if file:
-        os.makedirs("./temp", exist_ok=True)
-        path = f"./temp/{file.filename}"
-        with open(path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        try:
-            await client.send_file(
-                CHANNEL_USERNAME,
-                path,
-                caption=caption or " ",
-                parse_mode="HTML"
-            )
-        except Exception as e:
-            return {"status": "error", "detail": str(e)}
-    else:
-        # отправляем просто текст
+    # Нет файлов — просто отправка текста
+    if not media:
         if not caption.strip():
             return {"status": "error", "detail": "Empty post"}
         try:
@@ -144,9 +140,28 @@ async def publish(
                 parse_mode="HTML"
             )
         except Exception as e:
+            logger.error(f"❌ Failed to send message: {e}")
             return {"status": "error", "detail": str(e)}
+    else:
+        # Отправка медиа по очереди
+        os.makedirs("./temp", exist_ok=True)
+        for idx, file in enumerate(media):
+            path = f"./temp/{file.filename}"
+            with open(path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            try:
+                await client.send_file(
+                    CHANNEL_USERNAME,
+                    path,
+                    caption=caption if idx == 0 else None,  # подпись только к первому
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logger.error(f"❌ Failed to send file {file.filename}: {e}")
+                return {"status": "error", "detail": str(e)}
 
     return {"status": "ok", "text": caption}
+
 
 async def periodic_hashtag_scan():
     while True:

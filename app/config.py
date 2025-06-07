@@ -17,5 +17,3 @@ CERBER_GROUP = os.getenv("CERBER_GROUP", "@cerber_gate")
 
 SIGNATURE_HTML = '😾 <a href="https://t.me/stanleytrails">Азиатская бытовуха</a>'
 SIGNATURE_TEXT = '😾 Азиатская бытовуха'
-
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
