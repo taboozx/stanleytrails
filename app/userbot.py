@@ -3,23 +3,17 @@ from fastapi import FastAPI, UploadFile, Form, HTTPException, Depends, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from telethon import events, functions, types
-from telethon import events, functions
 from datetime import datetime, timedelta, timezone
-=======
-from telethon.tl.types import Message
-from telethon import events
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import GetRepliesRequest
 from telethon.errors import MsgIdInvalidError
-from datetime import datetime
->>>>>>> origin/codex/refactor-app/userbot.py-to-handle-channel-peer-and-errors
+from telethon.tl.types import Message
 from app.api import hashtags_api
 from app.telegram_client import client
 from app.utils.extract_hashtags import extract_hashtags_from_channel
 from typing import List
 from collections import defaultdict
 import logging
-
 
 from app.config import (
     CHANNEL_USERNAME, FRONTEND_ORIGIN,
@@ -30,7 +24,6 @@ from app.schemas.contest import ContestRunRequest
 
 SIGNATURE_HTML = '😾 <a href="https://t.me/stanleytrails">Азиатская бытовуха</a>'
 SIGNATURE_TEXT = '😾 Азиатская бытовуха'
-
 
 # 🌐 FastAPI app
 app = FastAPI()
@@ -147,9 +140,9 @@ async def publish(
 ):
     logger = logging.getLogger("uvicorn")
 
-    logger.info("📥 Incoming POST /publish/")
+    logger.info("📅 Incoming POST /publish/")
     logger.info(f"📝 Title: {title}")
-    logger.info(f"🧾 Description: {description}")
+    logger.info(f"📟 Description: {description}")
     logger.info(f"🖼 Files: {[file.filename for file in media] if media else 'No files'}")
 
     caption = ""
@@ -157,37 +150,10 @@ async def publish(
         caption += f"<b>{title.strip()}</b>"
     if description.strip():
         if caption:
-    reacted: set[tuple[int, int]] = set()
-        # \u2795 Count reactions
-        offset = None
-        while True:
-            res = await client(
-                functions.messages.GetMessageReactionsListRequest(
-                    peer=WATCH_CHANNEL,
-                    id=msg.id,
-                    limit=100,
-                    reaction=None,
-                    offset=offset,
-                )
-            )
+            caption += "\n\n"
+        caption += description.strip()
 
-            for rec in res.reactions:
-                uid = getattr(rec.peer_id, "user_id", None)
-                if uid is None:
-                    continue
-                key = (uid, msg.id)
-                if key in reacted:
-                    continue
-                reacted.add(key)
-                scores[uid] += 1
-
-            if not res.next_offset:
-                break
-            offset = res.next_offset
-
-        # \u2795 Count comments
-                    offset_date=None,
-
+    if not media:
         try:
             await client.send_message(
                 CHANNEL_USERNAME,
@@ -198,7 +164,6 @@ async def publish(
             logger.error(f"❌ Failed to send message: {e}")
             return {"status": "error", "detail": str(e)}
     else:
-        # Отправка медиа по очереди
         os.makedirs("./temp", exist_ok=True)
         for idx, file in enumerate(media):
             path = f"./temp/{file.filename}"
@@ -208,7 +173,7 @@ async def publish(
                 await client.send_file(
                     CHANNEL_USERNAME,
                     path,
-                    caption=caption if idx == 0 else None,  # подпись только к первому
+                    caption=caption if idx == 0 else None,
                     parse_mode="HTML"
                 )
             except Exception as e:
@@ -216,7 +181,6 @@ async def publish(
                 return {"status": "error", "detail": str(e)}
 
     return {"status": "ok", "text": caption}
-
 
 async def periodic_hashtag_scan():
     while True:
@@ -227,8 +191,7 @@ async def periodic_hashtag_scan():
             print(f"✅ Хэштеги обновлены ({datetime.now().isoformat()})")
         except Exception as e:
             print(f"❌ Ошибка при сканировании: {e}")
-        await asyncio.sleep(86400)  # 24 часа
-
+        await asyncio.sleep(86400)
 
 @app.post("/contest/run")
 async def contest_run(
@@ -239,27 +202,35 @@ async def contest_run(
     counted: set[tuple[int, int]] = set()
 
     full = await client(functions.channels.GetFullChannelRequest(channel=WATCH_CHANNEL))
-    _ = full.full_chat.linked_chat_id  # ensure discussion chat exists
+    _ = full.full_chat.linked_chat_id
 
     async for msg in client.iter_messages(WATCH_CHANNEL):
         if msg.date < since:
             break
 
+        if not msg.replies or not msg.replies.replies:
+            continue
+
         offset_id = 0
         while True:
-            r = await client(
-                functions.messages.GetRepliesRequest(
-                    peer=WATCH_CHANNEL,
-                    msg_id=msg.id,
-                    offset_id=offset_id,
-                    offset_date=None,  # required; no offset_peer in Telethon
-                    add_offset=0,
-                    limit=100,
-                    max_id=0,
-                    min_id=0,
-                    hash=0,
+            try:
+                r = await client(
+                    functions.messages.GetRepliesRequest(
+                        peer=WATCH_CHANNEL,
+                        msg_id=msg.id,
+                        offset_id=offset_id,
+                        offset_date=None,
+                        offset_peer=None,
+                        add_offset=0,
+                        limit=100,
+                        max_id=0,
+                        min_id=0,
+                        hash=0,
+                    )
                 )
-            )
+            except Exception as e:
+                logging.error(f"❌ GetReplies error on msg {msg.id}: {e}")
+                break
 
             if not r.messages:
                 break
