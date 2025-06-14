@@ -198,7 +198,7 @@ async def contest_run(
                     peer=WATCH_CHANNEL,
                     msg_id=msg.id,
                     offset_id=offset_id,
-                    offset_date=None,
+                    offset_date=None,  # required; no offset_peer in Telethon
                     add_offset=0,
                     limit=100,
                     max_id=0,
