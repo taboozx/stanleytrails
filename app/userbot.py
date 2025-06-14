@@ -2,13 +2,13 @@ import os, shutil, asyncio
 from fastapi import FastAPI, UploadFile, Form, HTTPException, Depends, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from telethon.tl.types import Message
-from telethon import events
-from datetime import datetime
+from telethon import events, functions, types
+from datetime import datetime, timedelta, timezone
 from app.api import hashtags_api
 from app.telegram_client import client
 from app.utils.extract_hashtags import extract_hashtags_from_channel
 from typing import List
+from collections import defaultdict
 import logging
 
 
@@ -17,6 +17,7 @@ from app.config import (
     WATCH_CHANNEL, AUTH_TOKEN,
     SIGNATURE_HTML, SIGNATURE_TEXT
 )
+from app.schemas.contest import ContestRunRequest
 
 SIGNATURE_HTML = '😾 <a href="https://t.me/stanleytrails">Азиатская бытовуха</a>'
 SIGNATURE_TEXT = '😾 Азиатская бытовуха'
@@ -167,9 +168,110 @@ async def periodic_hashtag_scan():
     while True:
         print("🕵️‍♂️ Запуск фонового сканирования хэштегов")
         try:
-            await asyncio.sleep(5) 
+            await asyncio.sleep(5)
             await extract_hashtags_from_channel()
             print(f"✅ Хэштеги обновлены ({datetime.now().isoformat()})")
         except Exception as e:
             print(f"❌ Ошибка при сканировании: {e}")
         await asyncio.sleep(86400)  # 24 часа
+
+
+@app.post("/contest/run")
+async def contest_run(
+    data: ContestRunRequest, credentials: HTTPAuthorizationCredentials = Depends(verify_token)
+):
+    since = datetime.now(timezone.utc) - timedelta(days=data.days)
+    scores: dict[int, int] = defaultdict(int)
+    reacted: set[tuple[int, int]] = set()
+
+    full = await client(functions.channels.GetFullChannelRequest(channel=WATCH_CHANNEL))
+    _ = full.full_chat.linked_chat_id  # ensure discussion chat exists
+
+    async for msg in client.iter_messages(WATCH_CHANNEL):
+        if msg.date < since:
+            break
+
+        # \u2795 Count reactions
+        offset = None
+        while True:
+            try:
+                res = await client(
+                    functions.messages.GetMessageReactionsListRequest(
+                        peer=WATCH_CHANNEL,
+                        id=msg.id,
+                        limit=100,
+                        reaction=None,
+                        offset=offset,
+                    )
+                )
+            except Exception as e:
+                logging.error(f"❌ Reactions error on msg {msg.id}: {e}")
+                break
+
+            for rec in res.reactions:
+                uid = getattr(rec.peer_id, "user_id", None)
+                if uid is None:
+                    continue
+                key = (uid, msg.id)
+                if key in reacted:
+                    continue
+                reacted.add(key)
+                scores[uid] += 1
+
+            if not res.next_offset:
+                break
+            offset = res.next_offset
+
+        # \u2795 Count comments
+        offset_id = 0
+        while True:
+            try:
+                r = await client(
+                    functions.messages.GetRepliesRequest(
+                        peer=WATCH_CHANNEL,
+                        msg_id=msg.id,
+                        offset_id=offset_id,
+                        offset_date=None,
+                        add_offset=0,
+                        limit=100,
+                        max_id=0,
+                        min_id=0,
+                        hash=0,
+                    )
+                )
+            except TypeError as e:
+                logging.error(f"❌ GetReplies error on msg {msg.id}: {e}")
+                break
+
+            if not r.messages:
+                break
+
+            for c in r.messages:
+                uid = getattr(c.from_id, "user_id", None)
+                if not uid or c.date < since:
+                    continue
+                scores[uid] += 2
+
+            offset_id = r.messages[-1].id
+
+    sorted_users = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    winners = []
+    for uid, score in sorted_users[: data.winners_count]:
+        try:
+            user = await client.get_entity(uid)
+            username = user.username or (user.first_name or "")
+            if user.last_name:
+                username = f"{username} {user.last_name}".strip()
+            username = username.strip() or str(uid)
+        except Exception:
+            username = str(uid)
+
+        text = data.message.replace("@username", f"@{username}")
+        try:
+            await client.send_message(uid, text)
+        except Exception as e:
+            print(f"❌ Failed to notify {uid}: {e}")
+
+        winners.append({"username": username, "score": score})
+
+    return {"status": "ok", "winners": winners}

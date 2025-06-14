@@ -22,3 +22,9 @@ class ContestWinnerOut(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class ContestRunRequest(BaseModel):
+    days: int
+    message: str
+    winners_count: int = 3
