@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from telethon.tl.types import Message
 from telethon import events, functions, types
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.api import hashtags_api
 from app.telegram_client import client
 from app.utils.extract_hashtags import extract_hashtags_from_channel
@@ -179,7 +179,7 @@ async def periodic_hashtag_scan():
 
 @app.post("/contest/run")
 async def contest_run(data: ContestRunRequest, credentials: HTTPAuthorizationCredentials = Depends(verify_token)):
-    since = datetime.utcnow() - timedelta(days=data.days)
+    since = datetime.now(timezone.utc) - timedelta(days=data.days)
     scores: dict[int, int] = defaultdict(int)
     reacted: set[tuple[int, int]] = set()
 
