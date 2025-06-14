@@ -3,7 +3,19 @@ from fastapi import FastAPI, UploadFile, Form, HTTPException, Depends, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from telethon import events, functions, types
+
 from datetime import datetime, timedelta, timezone
+
+from telethon import events, functions
+from datetime import datetime, timedelta, timezone
+
+from telethon.tl.types import Message
+from telethon import events
+from telethon.tl.functions.channels import GetFullChannelRequest
+from telethon.tl.functions.messages import GetRepliesRequest
+from telethon.errors import MsgIdInvalidError
+from datetime import datetime
+
 from app.api import hashtags_api
 from app.telegram_client import client
 from app.utils.extract_hashtags import extract_hashtags_from_channel
@@ -51,7 +63,10 @@ async def startup():
 
 # 🕰 Background watcher: check and fix message signatures
 async def auto_signature_watcher():
-    async for msg in client.iter_messages(WATCH_CHANNEL, limit=30):
+    channel_peer = await client.get_input_entity(WATCH_CHANNEL)
+    await client(GetFullChannelRequest(channel_peer))
+
+    async for msg in client.iter_messages(channel_peer, limit=30):
         text = msg.message or msg.raw_text or ""
         if not text:
             continue
@@ -69,6 +84,24 @@ async def auto_signature_watcher():
             print(f"[CLEANED + SIGNED] ID {msg.id}")
         except Exception as e:
             print(f"[CLEAN ERROR] {msg.id} → {e}")
+
+        try:
+            await client(
+                GetRepliesRequest(
+                    peer=channel_peer,
+                    msg_id=msg.id,
+                    offset_id=0,
+                    offset_date=None,
+                    add_offset=0,
+                    limit=1,
+                    max_id=0,
+                    min_id=0,
+                    hash=0,
+                )
+            )
+        except MsgIdInvalidError as e:
+            logging.error(f"[REPLY ERROR] {msg.id} → {e}")
+            continue
 
 # 🔔 Realtime signature handler
 @client.on(events.NewMessage(chats=WATCH_CHANNEL))
@@ -127,13 +160,37 @@ async def publish(
         caption += f"<b>{title.strip()}</b>"
     if description.strip():
         if caption:
-            caption += "\n\n"
-        caption += description.strip()
+    reacted: set[tuple[int, int]] = set()
+        # \u2795 Count reactions
+        offset = None
+        while True:
+            res = await client(
+                functions.messages.GetMessageReactionsListRequest(
+                    peer=WATCH_CHANNEL,
+                    id=msg.id,
+                    limit=100,
+                    reaction=None,
+                    offset=offset,
+                )
+            )
 
-    # Нет файлов — просто отправка текста
-    if not media:
-        if not caption.strip():
-            return {"status": "error", "detail": "Empty post"}
+            for rec in res.reactions:
+                uid = getattr(rec.peer_id, "user_id", None)
+                if uid is None:
+                    continue
+                key = (uid, msg.id)
+                if key in reacted:
+                    continue
+                reacted.add(key)
+                scores[uid] += 1
+
+            if not res.next_offset:
+                break
+            offset = res.next_offset
+
+        # \u2795 Count comments
+                    offset_date=None,
+
         try:
             await client.send_message(
                 CHANNEL_USERNAME,
@@ -184,13 +241,13 @@ async def contest_run(
     scores: dict[int, int] = defaultdict(int)
     reacted: set[tuple[int, int]] = set()
 
+
     full = await client(functions.channels.GetFullChannelRequest(channel=WATCH_CHANNEL))
     _ = full.full_chat.linked_chat_id  # ensure discussion chat exists
 
     async for msg in client.iter_messages(WATCH_CHANNEL):
         if msg.date < since:
             break
-
         # \u2795 Count reactions
         offset = None
         while True:
@@ -243,6 +300,22 @@ async def contest_run(
                 logging.error(f"❌ GetReplies error on msg {msg.id}: {e}")
                 break
 
+        offset_id = 0
+        while True:
+            r = await client(
+                functions.messages.GetRepliesRequest(
+                    peer=WATCH_CHANNEL,
+                    msg_id=msg.id,
+                    offset_id=offset_id,
+                    offset_date=None,  # required; no offset_peer in Telethon
+                    add_offset=0,
+                    limit=100,
+                    max_id=0,
+                    min_id=0,
+                    hash=0,
+                )
+            )
+
             if not r.messages:
                 break
 
@@ -250,6 +323,10 @@ async def contest_run(
                 uid = getattr(c.from_id, "user_id", None)
                 if not uid or c.date < since:
                     continue
+                key = (uid, msg.id)
+                if key in counted:
+                    continue
+                counted.add(key)
                 scores[uid] += 2
 
             offset_id = r.messages[-1].id
