@@ -2,6 +2,10 @@ import os, shutil, asyncio
 from fastapi import FastAPI, UploadFile, Form, HTTPException, Depends, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from telethon import events, functions, types
+from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
+
 from telethon import events, functions
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import GetRepliesRequest
@@ -136,7 +140,8 @@ async def publish(
     logger.info(f"🧾 Description: {description}")
     logger.info(f"🖼 Files: {[file.filename for file in media] if media else 'No files'}")
 
-    caption = ""
+    # Use timezone-aware datetime to match message dates from Telegram
+    since = datetime.now(timezone.utc) - timedelta(days=data.days)
     if title and title.strip():
         caption += f"<b>{title.strip()}</b>"
     if description.strip():
