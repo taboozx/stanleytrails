@@ -198,11 +198,12 @@ async def contest_run(
                     peer=WATCH_CHANNEL,
                     msg_id=msg.id,
                     offset_id=offset_id,
-                    limit=100,
+                    offset_date=None,
                     add_offset=0,
-                    hash=0,
+                    limit=100,
                     max_id=0,
                     min_id=0,
+                    hash=0,
                 )
             )
 
