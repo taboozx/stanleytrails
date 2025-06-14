@@ -4,7 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from telethon.tl.types import Message
 from telethon import events
-from telethon.tl.functions.channels import GetFullChannelRequest, GetRepliesRequest
+from telethon.tl.functions.channels import GetFullChannelRequest
+from telethon.tl.functions.messages import GetRepliesRequest
 from telethon.errors import MsgIdInvalidError
 from datetime import datetime
 from app.api import hashtags_api
