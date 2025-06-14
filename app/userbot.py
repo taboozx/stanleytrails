@@ -2,7 +2,7 @@ import os, shutil, asyncio
 from fastapi import FastAPI, UploadFile, Form, HTTPException, Depends, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-<<<<<<< HEAD
+from telethon import events, functions, types
 from telethon import events, functions
 from datetime import datetime, timedelta, timezone
 =======
@@ -157,13 +157,37 @@ async def publish(
         caption += f"<b>{title.strip()}</b>"
     if description.strip():
         if caption:
-            caption += "\n\n"
-        caption += description.strip()
+    reacted: set[tuple[int, int]] = set()
+        # \u2795 Count reactions
+        offset = None
+        while True:
+            res = await client(
+                functions.messages.GetMessageReactionsListRequest(
+                    peer=WATCH_CHANNEL,
+                    id=msg.id,
+                    limit=100,
+                    reaction=None,
+                    offset=offset,
+                )
+            )
 
-    # Нет файлов — просто отправка текста
-    if not media:
-        if not caption.strip():
-            return {"status": "error", "detail": "Empty post"}
+            for rec in res.reactions:
+                uid = getattr(rec.peer_id, "user_id", None)
+                if uid is None:
+                    continue
+                key = (uid, msg.id)
+                if key in reacted:
+                    continue
+                reacted.add(key)
+                scores[uid] += 1
+
+            if not res.next_offset:
+                break
+            offset = res.next_offset
+
+        # \u2795 Count comments
+                    offset_date=None,
+
         try:
             await client.send_message(
                 CHANNEL_USERNAME,
