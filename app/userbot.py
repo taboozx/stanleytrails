@@ -3,24 +3,21 @@ from fastapi import FastAPI, UploadFile, Form, HTTPException, Depends, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from telethon import events, functions, types
-from telethon import events, functions
 from datetime import datetime, timedelta, timezone
-=======
-from telethon.tl.types import Message
-from telethon import events
+from datetime import datetime, timedelta, timezone
+
+from telethon import events, functions
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import GetRepliesRequest
 from telethon.errors import MsgIdInvalidError
-from datetime import datetime
->>>>>>> origin/codex/refactor-app/userbot.py-to-handle-channel-peer-and-errors
-from app.api import hashtags_api
-from app.telegram_client import client
-from app.utils.extract_hashtags import extract_hashtags_from_channel
+from datetime import datetime, timedelta, timezone
 from typing import List
 from collections import defaultdict
 import logging
 
-
+from app.api import hashtags_api
+from app.telegram_client import client
+from app.utils.extract_hashtags import extract_hashtags_from_channel
 from app.config import (
     CHANNEL_USERNAME, FRONTEND_ORIGIN,
     WATCH_CHANNEL, AUTH_TOKEN,
@@ -31,12 +28,9 @@ from app.schemas.contest import ContestRunRequest
 SIGNATURE_HTML = '😾 <a href="https://t.me/stanleytrails">Азиатская бытовуха</a>'
 SIGNATURE_TEXT = '😾 Азиатская бытовуха'
 
-
-# 🌐 FastAPI app
 app = FastAPI()
 app.include_router(hashtags_api.router)
 
-# 🌐 CORS setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[FRONTEND_ORIGIN],
@@ -45,20 +39,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 🔐 Security
 security = HTTPBearer()
+
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     if credentials.credentials != AUTH_TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-# 🟢 Startup event: launch Telegram client and background task
 @app.on_event("startup")
 async def startup():
     await client.start()
     asyncio.create_task(periodic_hashtag_scan())
     asyncio.create_task(auto_signature_watcher())
 
-# 🕰 Background watcher: check and fix message signatures
 async def auto_signature_watcher():
     channel_peer = await client.get_input_entity(WATCH_CHANNEL)
     await client(GetFullChannelRequest(channel_peer))
@@ -100,7 +92,6 @@ async def auto_signature_watcher():
             logging.error(f"[REPLY ERROR] {msg.id} → {e}")
             continue
 
-# 🔔 Realtime signature handler
 @client.on(events.NewMessage(chats=WATCH_CHANNEL))
 async def realtime_signature_handler(event):
     msg = event.message
@@ -113,8 +104,6 @@ async def realtime_signature_handler(event):
         print(f"[REALTIME SIGNED] ID {msg.id}")
     except Exception as e:
         print(f"[REALTIME ERROR] {msg.id} → {e}")
-
-# 🧠 Caption formatter
 
 def format_caption(text: str) -> str:
     while SIGNATURE_HTML in text:
@@ -136,7 +125,6 @@ def format_caption(text: str) -> str:
     result = f"{title}\n\n{body.strip()}\n\n{SIGNATURE_HTML}"
     return result.strip()
 
-# 📤 Upload API
 @app.post("/publish/")
 async def publish(
     type: str = Form(None),
@@ -152,42 +140,16 @@ async def publish(
     logger.info(f"🧾 Description: {description}")
     logger.info(f"🖼 Files: {[file.filename for file in media] if media else 'No files'}")
 
-    caption = ""
+    # Use timezone-aware datetime to match message dates from Telegram
+    since = datetime.now(timezone.utc) - timedelta(days=data.days)
     if title and title.strip():
         caption += f"<b>{title.strip()}</b>"
     if description.strip():
         if caption:
-    reacted: set[tuple[int, int]] = set()
-        # \u2795 Count reactions
-        offset = None
-        while True:
-            res = await client(
-                functions.messages.GetMessageReactionsListRequest(
-                    peer=WATCH_CHANNEL,
-                    id=msg.id,
-                    limit=100,
-                    reaction=None,
-                    offset=offset,
-                )
-            )
+            caption += "\n\n"
+        caption += description.strip()
 
-            for rec in res.reactions:
-                uid = getattr(rec.peer_id, "user_id", None)
-                if uid is None:
-                    continue
-                key = (uid, msg.id)
-                if key in reacted:
-                    continue
-                reacted.add(key)
-                scores[uid] += 1
-
-            if not res.next_offset:
-                break
-            offset = res.next_offset
-
-        # \u2795 Count comments
-                    offset_date=None,
-
+    if not media:
         try:
             await client.send_message(
                 CHANNEL_USERNAME,
@@ -198,7 +160,6 @@ async def publish(
             logger.error(f"❌ Failed to send message: {e}")
             return {"status": "error", "detail": str(e)}
     else:
-        # Отправка медиа по очереди
         os.makedirs("./temp", exist_ok=True)
         for idx, file in enumerate(media):
             path = f"./temp/{file.filename}"
@@ -208,7 +169,7 @@ async def publish(
                 await client.send_file(
                     CHANNEL_USERNAME,
                     path,
-                    caption=caption if idx == 0 else None,  # подпись только к первому
+                    caption=caption if idx == 0 else None,
                     parse_mode="HTML"
                 )
             except Exception as e:
@@ -216,7 +177,6 @@ async def publish(
                 return {"status": "error", "detail": str(e)}
 
     return {"status": "ok", "text": caption}
-
 
 async def periodic_hashtag_scan():
     while True:
@@ -227,8 +187,7 @@ async def periodic_hashtag_scan():
             print(f"✅ Хэштеги обновлены ({datetime.now().isoformat()})")
         except Exception as e:
             print(f"❌ Ошибка при сканировании: {e}")
-        await asyncio.sleep(86400)  # 24 часа
-
+        await asyncio.sleep(86400)
 
 @app.post("/contest/run")
 async def contest_run(
@@ -239,27 +198,65 @@ async def contest_run(
     counted: set[tuple[int, int]] = set()
 
     full = await client(functions.channels.GetFullChannelRequest(channel=WATCH_CHANNEL))
-    _ = full.full_chat.linked_chat_id  # ensure discussion chat exists
+    _ = full.full_chat.linked_chat_id
 
     async for msg in client.iter_messages(WATCH_CHANNEL):
         if msg.date < since:
             break
 
+        offset = None
+        while True:
+            try:
+                res = await client(
+                    functions.messages.GetMessageReactionsListRequest(
+                        peer=WATCH_CHANNEL,
+                        id=msg.id,
+                        limit=100,
+                        reaction=None,
+                        offset=offset,
+                    )
+                )
+            except Exception as e:
+                logging.error(f"❌ Reactions error on msg {msg.id}: {e}")
+                break
+
+            for rec in res.reactions:
+                uid = getattr(rec.peer_id, "user_id", None)
+                if uid is None:
+                    continue
+                key = (uid, msg.id)
+                if key in counted:
+                    continue
+                counted.add(key)
+                scores[uid] += 1
+
+            if not res.next_offset:
+                break
+            offset = res.next_offset
+
+        if not msg.replies or not msg.replies.replies:
+            continue
+
         offset_id = 0
         while True:
-            r = await client(
-                functions.messages.GetRepliesRequest(
-                    peer=WATCH_CHANNEL,
-                    msg_id=msg.id,
-                    offset_id=offset_id,
-                    offset_date=None,  # required; no offset_peer in Telethon
-                    add_offset=0,
-                    limit=100,
-                    max_id=0,
-                    min_id=0,
-                    hash=0,
+            try:
+                r = await client(
+                    functions.messages.GetRepliesRequest(
+                        peer=WATCH_CHANNEL,
+                        msg_id=msg.id,
+                        offset_id=offset_id,
+                        offset_date=None,
+                        offset_peer=None,
+                        add_offset=0,
+                        limit=100,
+                        max_id=0,
+                        min_id=0,
+                        hash=0,
+                    )
                 )
-            )
+            except Exception as e:
+                logging.error(f"❌ GetReplies error on msg {msg.id}: {e}")
+                break
 
             if not r.messages:
                 break
