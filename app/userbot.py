@@ -2,8 +2,16 @@ import os, shutil, asyncio
 from fastapi import FastAPI, UploadFile, Form, HTTPException, Depends, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+<<<<<<< HEAD
 from telethon import events, functions
 from datetime import datetime, timedelta, timezone
+=======
+from telethon.tl.types import Message
+from telethon import events
+from telethon.tl.functions.channels import GetFullChannelRequest, GetRepliesRequest
+from telethon.errors import MsgIdInvalidError
+from datetime import datetime
+>>>>>>> origin/codex/refactor-app/userbot.py-to-handle-channel-peer-and-errors
 from app.api import hashtags_api
 from app.telegram_client import client
 from app.utils.extract_hashtags import extract_hashtags_from_channel
@@ -51,7 +59,10 @@ async def startup():
 
 # 🕰 Background watcher: check and fix message signatures
 async def auto_signature_watcher():
-    async for msg in client.iter_messages(WATCH_CHANNEL, limit=30):
+    channel_peer = await client.get_input_entity(WATCH_CHANNEL)
+    await client(GetFullChannelRequest(channel_peer))
+
+    async for msg in client.iter_messages(channel_peer, limit=30):
         text = msg.message or msg.raw_text or ""
         if not text:
             continue
@@ -69,6 +80,24 @@ async def auto_signature_watcher():
             print(f"[CLEANED + SIGNED] ID {msg.id}")
         except Exception as e:
             print(f"[CLEAN ERROR] {msg.id} → {e}")
+
+        try:
+            await client(
+                GetRepliesRequest(
+                    peer=channel_peer,
+                    msg_id=msg.id,
+                    offset_id=0,
+                    offset_date=None,
+                    add_offset=0,
+                    limit=1,
+                    max_id=0,
+                    min_id=0,
+                    hash=0,
+                )
+            )
+        except MsgIdInvalidError as e:
+            logging.error(f"[REPLY ERROR] {msg.id} → {e}")
+            continue
 
 # 🔔 Realtime signature handler
 @client.on(events.NewMessage(chats=WATCH_CHANNEL))
