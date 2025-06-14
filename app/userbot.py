@@ -2,8 +2,7 @@ import os, shutil, asyncio
 from fastapi import FastAPI, UploadFile, Form, HTTPException, Depends, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from telethon.tl.types import Message
-from telethon import events, functions, types
+from telethon import events, functions
 from datetime import datetime, timedelta, timezone
 from app.api import hashtags_api
 from app.telegram_client import client
@@ -178,42 +177,49 @@ async def periodic_hashtag_scan():
 
 
 @app.post("/contest/run")
-async def contest_run(data: ContestRunRequest, credentials: HTTPAuthorizationCredentials = Depends(verify_token)):
+async def contest_run(
+    data: ContestRunRequest, credentials: HTTPAuthorizationCredentials = Depends(verify_token)
+):
     since = datetime.now(timezone.utc) - timedelta(days=data.days)
     scores: dict[int, int] = defaultdict(int)
-    reacted: set[tuple[int, int]] = set()
+    counted: set[tuple[int, int]] = set()
+
+    full = await client(functions.channels.GetFullChannelRequest(channel=WATCH_CHANNEL))
+    _ = full.full_chat.linked_chat_id  # ensure discussion chat exists
 
     async for msg in client.iter_messages(WATCH_CHANNEL):
         if msg.date < since:
             break
 
-        # count comments
-        async for comment in client.iter_messages(WATCH_CHANNEL, reply_to=msg.id):
-            if comment.date < since or not comment.sender_id:
-                continue
-            scores[comment.sender_id] += 2
-
-        # count reactions
-        if msg.reactions:
-            offset = None
-            while True:
-                r = await client(
-                    functions.messages.GetMessageReactionsListRequest(
-                        WATCH_CHANNEL, msg.id, limit=100, offset=offset
-                    )
+        offset_id = 0
+        while True:
+            r = await client(
+                functions.messages.GetRepliesRequest(
+                    peer=WATCH_CHANNEL,
+                    msg_id=msg.id,
+                    offset_id=offset_id,
+                    limit=100,
+                    add_offset=0,
+                    hash=0,
+                    max_id=0,
+                    min_id=0,
                 )
-                for pr in r.reactions:
-                    uid = getattr(pr.peer_id, "user_id", None)
-                    if uid is None:
-                        continue
-                    key = (uid, msg.id)
-                    if key in reacted:
-                        continue
-                    reacted.add(key)
-                    scores[uid] += 1
-                if not r.next_offset:
-                    break
-                offset = r.next_offset
+            )
+
+            if not r.messages:
+                break
+
+            for c in r.messages:
+                uid = getattr(c.from_id, "user_id", None)
+                if not uid or c.date < since:
+                    continue
+                key = (uid, msg.id)
+                if key in counted:
+                    continue
+                counted.add(key)
+                scores[uid] += 2
+
+            offset_id = r.messages[-1].id
 
     sorted_users = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     winners = []
